@@ -1512,8 +1512,13 @@ auto RdbLoaderBase::ReadHMap() -> io::Result<OpaqueObj> {
     load_trace->arr[i].resize(n);
     for (size_t j = 0; j < n; ++j) {
       error_code ec = ReadStringObj(&load_trace->arr[i][j].rdb_var);
-      if (ec)
-        return make_unexpected(ec);
+      if (ec) {
+        LOG(WARNING) << "Truncating hmap from " << n << " to " << j
+                     << " trace len: " << load_trace->arr.size();
+        load_trace->arr[i].resize(j);
+        n = j;
+        break;
+      }
     }
     len -= n;
   }
@@ -2089,9 +2094,12 @@ io::Result<uint64_t> RdbLoaderBase::LoadLen(bool* is_encoded) {
   uint64_t res;
   SET_OR_UNEXPECT(ReadPackedUInt(meta, bytes), res);
 
-  if (meta.Type() == RDB_ENCVAL && is_encoded)
+  if (meta.Type() == RDB_ENCVAL && is_encoded) {
     *is_encoded = true;
-
+    if (res > RDB_ENC_LZF) {
+      return Unexpected(errc::rdb_file_corrupted);
+    }
+  }
   mem_buf_->ConsumeInput(1 + meta.ByteSize());
 
   return res;
