@@ -672,8 +672,8 @@ Future<GenericError> ServerFamily::Load(const std::string& load_path) {
 
   LOG(INFO) << "Loading " << load_path;
 
-  GlobalState new_state = service_.SwitchState(GlobalState::ACTIVE, GlobalState::LOADING);
-  if (new_state != GlobalState::LOADING) {
+  auto [new_state, success] = service_.SwitchState(GlobalState::ACTIVE, GlobalState::LOADING);
+  if (success) {
     LOG(WARNING) << GlobalStateName(new_state) << " in progress, ignored";
     return {};
   }
@@ -1836,7 +1836,8 @@ void ServerFamily::ReplicaOfInternal(string_view host, string_view port_sv, Conn
       replica_.reset();
     }
 
-    CHECK(service_.SwitchState(GlobalState::LOADING, GlobalState::ACTIVE) == GlobalState::ACTIVE)
+    CHECK(service_.SwitchState(GlobalState::LOADING, GlobalState::ACTIVE).first ==
+          GlobalState::ACTIVE)
         << "Server is set to replica no one, yet state is not active!";
 
     return (*cntx)->SendOk();
@@ -1849,8 +1850,8 @@ void ServerFamily::ReplicaOfInternal(string_view host, string_view port_sv, Conn
   }
 
   // First, switch into the loading state
-  if (auto new_state = service_.SwitchState(GlobalState::ACTIVE, GlobalState::LOADING);
-      new_state != GlobalState::LOADING) {
+  if (auto [new_state, success] = service_.SwitchState(GlobalState::ACTIVE, GlobalState::LOADING);
+      success) {
     LOG(WARNING) << GlobalStateName(new_state) << " in progress, ignored";
     (*cntx)->SendError("Invalid state");
     return;
